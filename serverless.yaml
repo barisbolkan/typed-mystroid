@@ -1,0 +1,53 @@
+service: mystroid
+
+plugins:
+ - 'serverless-plugin-typescript'
+ - serverless-plugin-optimize
+ - serverless-offline
+
+provider:
+ name: aws
+ runtime: nodejs12.x
+ iamManagedPolicies:
+  - 'arn:aws:iam::aws:policy/AmazonSQSFullAccess'
+
+resources:
+  Resources:
+    # ApiGatewayMethodAsteroid:
+    #   Properties:
+    #     AuthorizationType: AWS_IAM 
+    GatewayResponseResourceNotFound:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        RestApiId: f5ev10st59
+        ResponseType: BAD_REQUEST_BODY
+        "StatusCode" : "422"
+        ResponseTemplates:
+          application/json: "{\"message\": \"$context.error.message\", \"error\": \"$context.error.validationErrorString\"}"
+
+functions:
+  cron: # Starts the streaming by spliting the pages into chunks
+    handler: src/cron.handler
+    events: 
+      - schedule:
+          rate: rate(1 hour)
+          enabled: true
+  stream: # Streaming from the queue
+    handler: src/streaming.handler
+    timeout: 120
+    events:
+      - sqs: 'arn:aws:sqs:us-east-1:847815818785:mystroid-streaming-queue'
+  api: # Api to serve
+    handler: src/api.handler
+    events:
+      - http:
+          path: 'asteroid'
+          method: get
+          request:
+            parameters:
+              querystrings:
+                page: true
+                limit: true
+      - http:
+          path: 'asteroid/{id}'
+          method: get
